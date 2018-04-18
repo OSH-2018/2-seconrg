@@ -6,14 +6,22 @@
 #include <stdlib.h>
 
 int outputt(char *cmd);
-int run (int x,char *spilt[128]);
-int specialtreat(char cmd[256]);
-int count;
+int run (int x,char *split[128]);
+int specialtreat(char cmd[256],int count);
+int flag=0;
 int main() {
-    char * args[128];
-    while (1) 
-	{
+    //int finalin=fileno(stdin);
+    //int finalout=fileno(stdout);
+	//int finalin=dup(STDIN_FILENO);
+        //int finalout=dup(STDOUT_FILENO);
+  	while (1)
+   	{
+       		//dup2(finalin,STDIN_FILENO);
+        	//dup2(finalout,STDOUT_FILENO);
 		char cmd[256];
+		int count;
+		flag=0;
+		cmd[0]='\0';
 		count=0;
         	printf("# ");
         	fflush(stdin);
@@ -21,24 +29,25 @@ int main() {
         	int i,j;
         	for (i = 0; cmd[i] != '\n'; i++);
         	cmd[i] = '\0';
-		for (j=0;j<256;j++)
-		{
-			if(cmd[j]=='|') 	count++;
-		}
-		//printf("count:%d\n",count);
+		for (j=0;j<=i;j++)
+			if(cmd[j]=='|') 	
+				count++;
 		if (count!=0)
-			specialtreat(cmd);
+		{
+			flag=1;
+			specialtreat(cmd,count);
+		}
 		else
 			outputt(cmd);
+
 	}
 }
-int specialtreat(char cmd[256])
+int specialtreat(char cmd[256],int count)
 {
 	char *split[128];
 	int i,j;
 	int pre=0;
 	int l=strlen(cmd);
-	printf("l:%d\n",l);
 	int n=0;
 	for (i=0;i<=l;i++)
 	{
@@ -47,14 +56,12 @@ int specialtreat(char cmd[256])
 			while(cmd[pre]==' ')
 				pre++;
 			j=i-1;
-			while(cmd[j-1]==' ')
+			while(cmd[j]==' ')
 				j--;
 			split[n]=&cmd[pre];
 			split[n][j-pre+1]='\0';
 			pre=i+1;
-			//printf("%d: %s\n",n,split[n]);
 			n++;
-			//if (i==l)	printf("%d %d\n ",n,i);
 		}	
 	}
 	run(count,split);
@@ -64,55 +71,63 @@ int specialtreat(char cmd[256])
 int run(int x,char *split[128])
 {
 	int fd[2];
-	int i,j;
+	int i=fileno(stdout); 
+	int j=fileno(stdin);
 	pid_t gid;
-	if (x==0)
+	gid=fork();
+	if (gid<0)
 	{
-		 outputt(split[0]);
-		 return 0;
+		printf("error!\n");
+		return 0;
 	}
-	else
+	else if (gid==0)
 	{
-		if (pipe(fd)<=0)
+		if (x==0)
+		{
+			 outputt(split[0]);
+                         exit(0);
+                }
+		if (pipe(fd)<0)
 		{
 			printf("pipe error!\n");
-			exit(0);
+			return 0;
 		}
-		if ((gid=fork())<0)
-		{
-			printf("fork error!\n");
-			exit(0);
-		}
-		if (gid==0)
-		{
-			pid_t pid=fork();
-			if (pid<=0)
+		else{
+			pid_t kid=fork();
+			if (kid<0)
 			{
-				printf("pipe error!\n");
+				printf("fork error!\n");
 				exit(0);
 			}
-			if (pid==0)
+			else if (kid==0)
 			{
-				close (fd[0]);
-				dup2(fd[1],STDOUT_FILENO);
+				close(fd[0]);
+				dup2(fd[1],i);
 				close (fd[1]);
-				run(count-1,split);
+				run(x-1,split);
+				exit(0);
 			}
-			if (pid==1)
+			else 
 			{
 				close(fd[1]);
-				dup2(fd[0],STDIN_FILENO);
+				dup2(fd[0],j);
 				close (fd[0]);
-				wait(NULL);
+				waitpid(kid,NULL,0);
 				outputt(split[x]);
+				exit(0);
 			}
 		}
-		if (gid==1) wait(NULL);
 	}
+	else 	wait(NULL);
 	return 1;
 }
 int outputt(char *cmd)
 {
+
+//	int finalout=dup(STD_OUT);
+
+//	dup2(finalout,STDOUT_FILENO);
+
 	int i,j;
 	char * args[128];
 	args[0]=cmd;
@@ -125,8 +140,6 @@ int outputt(char *cmd)
                     break;
                 }
 	args[i]=NULL;
-	//for (j=0;j<=i;j++)
-	//	printf("i:%d:/%s/\n",j,args[j]);
         if (!args[0])
 		return 0;
         if (strcmp(args[0], "cd") == 0)
@@ -163,12 +176,10 @@ int outputt(char *cmd)
 					temp=i;
 			}
 			printf("%d %d\n",temp,l);
-			if (temp!=0&&temp!=-1&&temp!=l)
+			if ((temp!=0) && (temp!=-1) && (temp!=l-1))
 			{
-				arger=args[i]+temp+1;
+				arger=args[1]+temp+1;
 				args[1][temp]='\0';
-				printf("%s\n",args[i]);
-				printf("%s\n",arger);
 			}
 			else if (temp==-1&&args[2][0]=='='&&strlen(args[2])==1)
 			{
@@ -180,7 +191,7 @@ int outputt(char *cmd)
 				}
 			}
 			else if (temp==-1&&args[2][0]=='='&&strlen(args[2])>1)  arger=args[2]+1;
-			else if (temp==l&&args[2])
+			else if (temp==l-1&&args[2])
 			{
 				arger=args[2];
 				args[1][temp]='\0';
@@ -199,11 +210,9 @@ int outputt(char *cmd)
 		}
 		return 0;
 	}
-	//printf("here\n");
         pid_t pid = fork();
         if (pid == 0)
 	{
-	    //printf("here\n");
             execvp(args[0], args);
             return 255;
         }
