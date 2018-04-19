@@ -146,7 +146,7 @@ int outputt(char *cmd)
 	{
             if (args[1])
 	    {
-               if (!chdir(args[1]))
+               if (chdir(args[1])<0)
 	       {
 			printf("chdir error!\n");
 			exit(0);
